@@ -21,6 +21,9 @@ import shutil
 import boto3
 from urllib.parse import urlparse
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 IngestionPipelineType = TypeVar("IngestionPipelineType", bound=IngestionPipeline)
 
@@ -247,37 +250,54 @@ class DocumentParser:
 
     def _download_from_s3(self, s3_url: str) -> Path:
         """Download file from S3/R2 and return path to temporary file."""
+        logger.info(f"Starting S3/R2 download from URL: {s3_url}")
+        
         # Parse S3 URL
         parsed_url = urlparse(s3_url)
         if not parsed_url.scheme == 's3':
+            logger.error(f"Invalid URL scheme: {parsed_url.scheme}, URL: {s3_url}")
             raise ValueError(f"Invalid S3/R2 URL scheme: {s3_url}")
         
         bucket = parsed_url.netloc
         key = parsed_url.path.lstrip('/')
+        logger.info(f"Parsed S3 details - Bucket: {bucket}, Key: {key}")
         
         # Validate file extension
         file_ext = Path(key).suffix.lower()
+        logger.info(f"File extension: {file_ext}")
         if not file_ext:
+            logger.error(f"No file extension found for key: {key}")
             raise ValueError(f"File has no extension: {key}")
         
         if file_ext not in {'.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls', '.txt', '.md', '.rst', '.zip'}:
+            logger.error(f"Unsupported file extension: {file_ext}")
             raise ValueError(f"Unsupported file extension: {file_ext}")
         
         # Create S3/R2 client
-        s3_client = self._get_s3_client()
+        try:
+            s3_client = self._get_s3_client()
+            logger.info("Successfully created S3/R2 client")
+        except Exception as e:
+            logger.error(f"Failed to create S3/R2 client: {str(e)}")
+            raise
         
         # Create temporary file
         temp_file = Path(tempfile.mkdtemp()) / Path(key).name
+        logger.info(f"Created temporary file: {temp_file}")
         
         try:
+            logger.info(f"Attempting to download from bucket: {bucket}, key: {key}")
             s3_client.download_file(
                 Bucket=bucket,
                 Key=key,
                 Filename=str(temp_file)
             )
+            logger.info(f"Successfully downloaded file to: {temp_file}")
             return temp_file
         except Exception as e:
+            logger.error(f"Failed to download from S3/R2. Error: {str(e)}")
             if temp_file.exists():
+                logger.info(f"Cleaning up temporary file: {temp_file}")
                 temp_file.unlink()
             raise ValueError(f"Failed to download from S3/R2: {str(e)}")
 
@@ -290,14 +310,20 @@ class DocumentParser:
         batch_size: int = 1
     ) -> Union[ParsedDocument, List[ParsedDocument]]:
         """Parse document using configured parser."""
+        logger.info(f"Starting parse for file: {file}")
+        
         # Handle S3/R2 URLs
         if isinstance(file, str) and file.startswith('s3://'):
+            logger.info(f"Detected S3/R2 URL: {file}")
             try:
                 temp_file = self._download_from_s3(file)
+                logger.info(f"Successfully downloaded S3/R2 file to: {temp_file}")
                 file_path = temp_file
             except Exception as e:
+                logger.error(f"Failed to process S3/R2 file: {str(e)}")
                 raise ValueError(f"Failed to process S3/R2 file: {str(e)}")
         else:
+            logger.info(f"Processing local file: {file}")
             file_path = Path(file)
         
         try:
