@@ -15,3 +15,4 @@ torchtext
 requests
 backoff
 markitdown
+boto3

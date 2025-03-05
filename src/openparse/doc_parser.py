@@ -18,6 +18,9 @@ from openparse.config import config, Config
 import zipfile
 import tempfile
 import shutil
+import boto3
+from urllib.parse import urlparse
+import os
 
 IngestionPipelineType = TypeVar("IngestionPipelineType", bound=IngestionPipeline)
 
@@ -215,6 +218,68 @@ class DocumentParser:
             return None
         return self.table_args_obj.model_dump()
 
+    def _get_s3_client(self, endpoint_url: Optional[str] = None) -> boto3.client:
+        """Create and return an S3 client configured for either AWS S3 or Cloudflare R2."""
+        # Default to R2 configuration if endpoint_url is not provided
+        if not endpoint_url:
+            account_id = os.getenv('CLOUDFLARE_ACCOUNT_ID')
+            if not account_id:
+                raise ValueError("CLOUDFLARE_ACCOUNT_ID environment variable is required for R2 storage")
+            endpoint_url = f"https://{account_id}.r2.cloudflarestorage.com"
+
+        client_kwargs = {
+            'service_name': 's3',
+            'endpoint_url': endpoint_url,
+            'aws_access_key_id': os.getenv('R2_ACCESS_KEY_ID'),
+            'aws_secret_access_key': os.getenv('R2_SECRET_ACCESS_KEY'),
+            'region_name': os.getenv('R2_REGION', 'auto'),  # Default to 'auto' if not specified
+            # R2 compatibility settings
+            'config': boto3.Config(
+                request_checksum_calculation='WHEN_REQUIRED',
+                response_checksum_validation='WHEN_REQUIRED'
+            )
+        }
+
+        # Remove None values
+        client_kwargs = {k: v for k, v in client_kwargs.items() if v is not None}
+        
+        return boto3.client(**client_kwargs)
+
+    def _download_from_s3(self, s3_url: str) -> Path:
+        """Download file from S3/R2 and return path to temporary file."""
+        # Parse S3 URL
+        parsed_url = urlparse(s3_url)
+        if not parsed_url.scheme == 's3':
+            raise ValueError(f"Invalid S3/R2 URL scheme: {s3_url}")
+        
+        bucket = parsed_url.netloc
+        key = parsed_url.path.lstrip('/')
+        
+        # Validate file extension
+        file_ext = Path(key).suffix.lower()
+        if not file_ext:
+            raise ValueError(f"File has no extension: {key}")
+        
+        if file_ext not in {'.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls', '.txt', '.md', '.rst', '.zip'}:
+            raise ValueError(f"Unsupported file extension: {file_ext}")
+        
+        # Create S3/R2 client
+        s3_client = self._get_s3_client()
+        
+        # Create temporary file
+        temp_file = Path(tempfile.mkdtemp()) / Path(key).name
+        
+        try:
+            s3_client.download_file(
+                Bucket=bucket,
+                Key=key,
+                Filename=str(temp_file)
+            )
+            return temp_file
+        except Exception as e:
+            if temp_file.exists():
+                temp_file.unlink()
+            raise ValueError(f"Failed to download from S3/R2: {str(e)}")
 
     def parse(
         self,
@@ -225,40 +290,53 @@ class DocumentParser:
         batch_size: int = 1
     ) -> Union[ParsedDocument, List[ParsedDocument]]:
         """Parse document using configured parser."""
-        file_path = Path(file)
+        # Handle S3/R2 URLs
+        if isinstance(file, str) and file.startswith('s3://'):
+            try:
+                temp_file = self._download_from_s3(file)
+                file_path = temp_file
+            except Exception as e:
+                raise ValueError(f"Failed to process S3/R2 file: {str(e)}")
+        else:
+            file_path = Path(file)
         
-        if self.use_markitdown:
-            if file_path.is_dir():
-                files = list(file_path.glob("*"))
-                return self._process_directory(files, batch_size)
-            elif file_path.suffix.lower() == '.zip':
-                # Extract files from ZIP and process each separately
-                with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                    files = []
-                    for filename in zip_ref.namelist():
-                        # Extract to temporary directory
-                        temp_dir = Path(tempfile.mkdtemp())
-                        extracted_path = temp_dir / Path(filename).name
-                        with zip_ref.open(filename) as source, open(extracted_path, 'wb') as target:
-                            shutil.copyfileobj(source, target)
-                        files.append(extracted_path)
-                    
-                    # Process extracted files
-                    try:
-                        return self._process_directory(files, batch_size)
-                    finally:
-                        # Clean up temp files
-                        shutil.rmtree(temp_dir)
-            
-            nodes, metadata = self.markitdown_parser.parse(file_path)
-            return self._process_markitdown(file_path, nodes, metadata)
-            
-        return self._process_pdfminer(
-            file_path,
-            parse_elements,
-            embeddings_provider,
-            ocr
-        )
+        try:
+            if self.use_markitdown:
+                if file_path.is_dir():
+                    files = list(file_path.glob("*"))
+                    return self._process_directory(files, batch_size)
+                elif file_path.suffix.lower() == '.zip':
+                    # Extract files from ZIP and process each separately
+                    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                        files = []
+                        for filename in zip_ref.namelist():
+                            # Extract to temporary directory
+                            temp_dir = Path(tempfile.mkdtemp())
+                            extracted_path = temp_dir / Path(filename).name
+                            with zip_ref.open(filename) as source, open(extracted_path, 'wb') as target:
+                                shutil.copyfileobj(source, target)
+                            files.append(extracted_path)
+                        
+                        # Process extracted files
+                        try:
+                            return self._process_directory(files, batch_size)
+                        finally:
+                            # Clean up temp files
+                            shutil.rmtree(temp_dir)
+                
+                nodes, metadata = self.markitdown_parser.parse(file_path)
+                return self._process_markitdown(file_path, nodes, metadata)
+                
+            return self._process_pdfminer(
+                file_path,
+                parse_elements,
+                embeddings_provider,
+                ocr
+            )
+        finally:
+            # Clean up temporary file if it was downloaded from S3
+            if isinstance(file, str) and file.startswith('s3://'):
+                temp_file.unlink()
 
     @staticmethod
     def _elems_to_nodes(

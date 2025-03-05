@@ -23,7 +23,8 @@ dependencies = [
     "backoff",
     "markitdown",
     "sphinx",
-    "sphinx-rtd-theme"
+    "sphinx-rtd-theme",
+    "boto3"
 ]
 
 [project.urls]

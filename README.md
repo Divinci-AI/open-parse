@@ -6,11 +6,11 @@
 [![CodeQL](https://github.com/DivinciApp/open-parse/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/DivinciApp/open-parse/actions/workflows/github-code-scanning/codeql)
 [![pytest](https://github.com/DivinciAI/open-parse/actions/workflows/pytest.yml/badge.svg)](https://github.com/DivinciAI/open-parse/actions/workflows/pytest.yml)
 
-Divinci™ fork of Open-Parse 🤖🖤
+Divinci™ fork of [Open-Parse](https://github.com/Filimoa/open-parse) 🤖🖤
 
 >Not all functionality is supported in this fork. Supported: 🦙 Ollama and 🟠☁️ Cloudflare, alongside the exisiting 🤖 OpenAI embeddings.
 
->MarkItDown is a parser option now that supports several file formats: 
+>[MarkItDown](https://github.com/microsoft/markitdown) is a parser option now that supports several file formats, but we've only tested .pdf and .docx: 
 .pdf, .docx, .pptx, .xlsx, .html, .txt, .json, .xml, .zip
 
 _ _ _
@@ -71,7 +71,7 @@ Open Parse is designed to fill this gap by providing a flexible, easy-to-use lib
 
 ## Examples
 
-## MarkItDown Integration
+### MarkItDown Integration
 
 Open-Parse now supports [MarkItDown](https://github.com/microsoft/markitdown) for enhanced document parsing:
 
@@ -84,11 +84,14 @@ parser = DocumentParser(use_markitdown=True)
 # Parse single document
 result = parser.parse("document.docx")
 
+# Parse document from R2/S3 URL
+result = parser.parse("s3://my-bucket/document.pdf")
+
 # Parse directory of documents
 results = parser.parse("./documents/", batch_size=2)
 ```
 
-``` python
+```python
 from openparse import DocumentParser
 from openparse.processing import SemanticIngestionPipeline
 
@@ -105,8 +108,11 @@ parser = DocumentParser(
     processing_pipeline=semantic_pipeline
 )
 
-# Parse document
+# Parse local document
 result = parser.parse("document.docx")
+
+# Parse document from R2/S3
+result = parser.parse("s3://my-bucket/document.pdf")
 ```
 
 ### Supported File Types
@@ -368,7 +374,7 @@ https://github.com/Filimoa/open-parse/tree/main/src/cookbooks
 
 _ _ _
 
-#### From original repository:
+#### From original [Open-Parse](https://github.com/Filimoa/open-parse) repository:
 
 #### Sponsors
 
