@@ -230,18 +230,30 @@ class DocumentParser:
                 raise ValueError("CLOUDFLARE_ACCOUNT_ID environment variable is required for R2 storage")
             endpoint_url = f"https://{account_id}.r2.cloudflarestorage.com"
 
+        # Log the configuration being used
+        logger.info("🟠☁️ Creating S3 client with configuration:")
+        logger.info(f"Endpoint URL: {endpoint_url}")
+        logger.info(f"Access Key ID present: {bool(os.getenv('R2_ACCESS_KEY_ID'))}")
+        logger.info(f"Secret Access Key present: {bool(os.getenv('R2_SECRET_ACCESS_KEY'))}")
+
         client_kwargs = {
             'service_name': 's3',
             'endpoint_url': endpoint_url,
             'aws_access_key_id': os.getenv('R2_ACCESS_KEY_ID'),
             'aws_secret_access_key': os.getenv('R2_SECRET_ACCESS_KEY'),
-            'region_name': os.getenv('R2_REGION', 'auto'),  # Default to 'auto' if not specified
-            # R2 compatibility settings
+            'region_name': os.getenv('R2_REGION', 'auto'),
             'config': boto3.Config(
                 request_checksum_calculation='WHEN_REQUIRED',
                 response_checksum_validation='WHEN_REQUIRED'
             )
         }
+
+        # Log the actual values being used (without exposing secrets)
+        logger.info("S3 client kwargs:")
+        safe_kwargs = client_kwargs.copy()
+        if 'aws_secret_access_key' in safe_kwargs:
+            safe_kwargs['aws_secret_access_key'] = '***'
+        logger.info(f"Client kwargs: {safe_kwargs}")
 
         # Remove None values
         client_kwargs = {k: v for k, v in client_kwargs.items() if v is not None}
