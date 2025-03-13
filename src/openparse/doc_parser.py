@@ -80,6 +80,9 @@ class DocumentParser:
         table_args=None,
         use_markitdown: bool = False,
         llm_client: Optional[object] = None,
+        chunk_size: int = 1000,
+        chunk_overlap: int = 200,
+        use_tokens: bool = True,
         verbose: bool = False,
          **kwargs
     ):
@@ -97,12 +100,30 @@ class DocumentParser:
         # Set pipeline verbosity
         self.processing_pipeline.verbose = self._verbose
         
-        # Initialize parsers and args
-        self.table_args = table_args
+        """
+        Initialize the document parser.
+        
+        Args:
+            use_markitdown: Whether to use MarkItDown for document parsing
+            use_ocr: Whether to use OCR for document parsing
+            table_args: Arguments for table extraction
+            processing_pipeline: Pipeline for processing extracted nodes
+            llm_client: Optional LLM client for enhanced parsing
+            chunk_size: Maximum size of text chunks (in characters or tokens)
+            chunk_overlap: Number of characters or tokens to overlap between chunks
+            use_tokens: If True, measures length in tokens; if False, uses characters
+            verbose: Whether to enable verbose logging
+        """
         self.use_markitdown = use_markitdown
+        self.table_args = table_args
+        
         if use_markitdown:
-            self.markitdown_parser = MarkItDownParser(llm_client=llm_client)
-
+            self.markitdown_parser = MarkItDownParser(
+                llm_client=llm_client,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                use_tokens=use_tokens
+            )
     def _process_directory(
         self,
         files: List[Path],
@@ -233,8 +254,6 @@ class DocumentParser:
         # Log the configuration being used
         logger.info("🟠☁️ Creating S3 client with configuration:")
         logger.info(f"Endpoint URL: {endpoint_url}")
-        logger.info(f"Access Key ID present: {bool(os.getenv('R2_ACCESS_KEY_ID'))}")
-        logger.info(f"Secret Access Key present: {bool(os.getenv('R2_SECRET_ACCESS_KEY'))}")
 
         client_kwargs = {
             'service_name': 's3',

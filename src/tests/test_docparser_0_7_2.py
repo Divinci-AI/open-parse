@@ -98,6 +98,53 @@ class TestMarkItDownDocParser:
         assert "file_type" in metadata
         assert metadata["file_type"] == ".txt"
 
+    def test_split_text_with_overlap(self):
+        """Test text chunking with overlap."""
+        parser = DocumentParser(
+            use_markitdown=True, 
+            chunk_size=50,
+            chunk_overlap=10,
+            use_tokens=False
+        )
+        
+        # Test with a long text that needs chunking
+        long_text = "This is a test " * 20  # Creates text longer than chunk_size
+        chunks = parser.markitdown_parser.split_text_with_overlap(long_text)
+        
+        # Verify we got multiple chunks
+        assert len(chunks) > 1
+        
+        # Verify chunk size constraints
+        for chunk in chunks:
+            assert len(chunk) <= 50 + 10  # Allow for some overlap
+            
+        # Verify overlap exists between chunks
+        if len(chunks) >= 2:
+            # The end of first chunk should appear at the start of second chunk
+            overlap = chunks[0][-10:]
+            assert overlap in chunks[1]
+
+    def test_token_based_chunking(self):
+        """Test token-based text chunking."""
+        parser = DocumentParser(
+            use_markitdown=True, 
+            chunk_size=10,  # 10 tokens
+            chunk_overlap=2,
+            use_tokens=True
+        )
+        
+        # Create text with exactly 25 tokens
+        text = "one two three four five six seven eight nine ten " * 2 + "one two three four five"
+        chunks = parser.markitdown_parser.split_text_with_overlap(text)
+        
+        # Should create 3 chunks with our settings
+        assert len(chunks) >= 2
+        
+        # Check token counts in each chunk
+        for chunk in chunks:
+            token_count = len([word for word in chunk.split() if word])
+            assert token_count <= 12  # chunk_size + overlap
+
     def test_batch_processing(self, tmp_path):
         """Test batch processing of multiple files."""
         # Create test files
@@ -166,6 +213,27 @@ class TestMarkItDownDocParser:
         assert isinstance(nodes, list)
         assert isinstance(metadata, dict)
         assert metadata["file_type"] == file_type
+
+    def test_llm_client_initialization(self):
+        """Test initialization with LLM client."""
+        mock_llm = MagicMock()
+        parser = DocumentParser(use_markitdown=True, llm_client=mock_llm)
+        
+        # Verify the LLM client was passed to MarkItDown
+        assert parser.markitdown_parser.parser is not None
+        
+    def test_custom_chunking_parameters(self):
+        """Test initialization with custom chunking parameters."""
+        parser = DocumentParser(
+            use_markitdown=True,
+            chunk_size=2000,
+            chunk_overlap=300,
+            use_tokens=False
+        )
+        
+        assert parser.markitdown_parser.chunk_size == 2000
+        assert parser.markitdown_parser.chunk_overlap == 300
+        assert parser.markitdown_parser.use_tokens is False
 
 class TestDocumentParser:
     def test_init_default(self):

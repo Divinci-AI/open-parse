@@ -22,6 +22,8 @@ venv
 docs.zip
 archive.zip
 *.egg-info
+.ropeproject
+.qodo
 
 # macOS
 .DS_Store
