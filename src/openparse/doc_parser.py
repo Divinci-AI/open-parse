@@ -84,7 +84,7 @@ class DocumentParser:
         chunk_overlap: int = 200,
         use_tokens: bool = True,
         verbose: bool = False,
-         **kwargs
+        **kwargs
     ):
         self._verbose = verbose
         
@@ -114,6 +114,25 @@ class DocumentParser:
             use_tokens: If True, measures length in tokens; if False, uses characters
             verbose: Whether to enable verbose logging
         """
+
+        # Extract config values from kwargs if present
+        if 'config' in kwargs and isinstance(kwargs['config'], dict):
+            config_dict = kwargs['config']
+            # Extract chunking parameters
+            chunking = config_dict.get('chunking', {})
+            min_tokens = chunking.get('minTokens', config_dict.get('minTokens', 1000))
+            max_tokens = chunking.get('maxTokens', config_dict.get('maxTokens', 1000))
+            chunk_overlap = chunking.get('overlap', config_dict.get('chunkOverlap', 200))
+            use_tokens = chunking.get('useTokens', config_dict.get('useTokens', True))
+            
+            # Override parameters with values from config
+            chunk_size = max_tokens
+            chunk_overlap = chunk_overlap
+            use_tokens = use_tokens
+            use_markitdown = config_dict.get('use_markitdown', use_markitdown)
+            
+            logger.info(f"Using config parameters: chunk_size={chunk_size}, chunk_overlap={chunk_overlap}, use_tokens={use_tokens}")
+
         self.use_markitdown = use_markitdown
         self.table_args = table_args
         
@@ -124,6 +143,7 @@ class DocumentParser:
                 chunk_overlap=chunk_overlap,
                 use_tokens=use_tokens
             )
+            logger.info(f"Initialized MarkItDown parser with chunk_size={chunk_size}, chunk_overlap={chunk_overlap}, use_tokens={use_tokens}")
     def _process_directory(
         self,
         files: List[Path],

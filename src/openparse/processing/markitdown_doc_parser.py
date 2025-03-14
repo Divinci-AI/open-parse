@@ -34,6 +34,8 @@ class DocumentParser:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.use_tokens = use_tokens
+        
+        self.logger.info(f"Initialized DocumentParser with chunk_size={chunk_size}, chunk_overlap={chunk_overlap}, use_tokens={use_tokens}")
 
     def split_text_with_overlap(self, text: str) -> List[str]:
         """
