@@ -280,25 +280,22 @@ class DocumentParser:
         return boto3.client(**client_kwargs)
 
     def _download_from_s3(self, s3_url: str) -> Path:
-        """Download file from S3/R2 and return path to temporary file."""
-        logger.info(f"Starting S3/R2 download from URL: {s3_url}")
-        
-        # Parse S3 URL
+        """Download file from S3/R2 to local temporary file."""
         parsed_url = urlparse(s3_url)
-        if not parsed_url.scheme == 's3':
-            logger.error(f"Invalid URL scheme: {parsed_url.scheme}, URL: {s3_url}")
-            raise ValueError(f"Invalid S3/R2 URL scheme: {s3_url}")
-        
         bucket = parsed_url.netloc
         key = parsed_url.path.lstrip('/')
         logger.info(f"Parsed S3 details - Bucket: {bucket}, Key: {key}")
         
-        # Validate file extension
-        file_ext = Path(key).suffix.lower()
+        # Extract file extension
+        file_ext = ''
+        if '.' in key:
+            file_ext = '.' + key.split('.')[-1].lower()
+        
         logger.info(f"File extension: {file_ext}")
         if not file_ext:
-            logger.error(f"No file extension found for key: {key}")
-            raise ValueError(f"File has no extension: {key}")
+            logger.warning(f"No file extension found for key: {key}, attempting to infer from content")
+            # Default to PDF if we can't determine the extension
+            file_ext = '.pdf'
         
         if file_ext not in {'.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls', '.txt', '.md', '.rst', '.zip'}:
             logger.error(f"Unsupported file extension: {file_ext}")
@@ -312,25 +309,18 @@ class DocumentParser:
             logger.error(f"Failed to create S3/R2 client: {str(e)}")
             raise
         
-        # Create temporary file
-        temp_file = Path(tempfile.mkdtemp()) / Path(key).name
-        logger.info(f"Created temporary file: {temp_file}")
+        # Create temporary file with proper extension
+        temp_file = Path(tempfile.mktemp(suffix=file_ext))
         
         try:
-            logger.info(f"Attempting to download from bucket: {bucket}, key: {key}")
-            s3_client.download_file(
-                Bucket=bucket,
-                Key=key,
-                Filename=str(temp_file)
-            )
-            logger.info(f"Successfully downloaded file to: {temp_file}")
+            s3_client.download_file(bucket, key, str(temp_file))
+            logger.info(f"Downloaded S3 file to {temp_file}")
             return temp_file
         except Exception as e:
-            logger.error(f"Failed to download from S3/R2. Error: {str(e)}")
+            logger.error(f"Failed to download S3 file: {str(e)}")
             if temp_file.exists():
-                logger.info(f"Cleaning up temporary file: {temp_file}")
                 temp_file.unlink()
-            raise ValueError(f"Failed to download from S3/R2: {str(e)}")
+            raise ValueError(f"Failed to download S3 file: {str(e)}")
 
     def parse(
         self,

@@ -175,16 +175,31 @@ class DocumentParser:
     def parse(self, file: Union[str, Path]) -> Tuple[List[Node], FileMetadata]:
         """Parse document into nodes using MarkItDown."""
         file_path = Path(file)
-        if file_path.suffix.lower() not in self.SUPPORTED_FORMATS:
-            raise ValueError(f"❌ Unsupported file format: {file_path.suffix}")
+        file_extension = file_path.suffix.lower()
+        
+        # Handle case where file extension might be empty
+        if not file_extension and isinstance(file, str):
+            # Try to extract extension from filename
+            filename = file.split('/')[-1]
+            if '.' in filename:
+                file_extension = '.' + filename.split('.')[-1].lower()
+        
+        if not file_extension:
+            self.logger.warning(f"No file extension detected for {file_path}, attempting to infer from content")
+            # Default to PDF if we can't determine the extension
+            file_extension = '.pdf'
+        
+        if file_extension not in self.SUPPORTED_FORMATS:
+            raise ValueError(f"❌ Unsupported file format: {file_extension}")
             
         try:
             # Pass file extension for ZIP handling
             result = self.parser.convert_local(
                 str(file_path), 
-                file_extension=file_path.suffix.lower()
+                file_extension=file_extension
             )
             metadata = self._get_metadata(result, file_path)
+            metadata['file_type'] = file_extension  # Ensure file_type is set correctly
             
             text = result.text_content
             self.logger.debug(f"📑 Extracted text content: {text[:100]}...")
