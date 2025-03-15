@@ -78,10 +78,10 @@ class DocumentParser:
         processing_pipeline: Union[IngestionPipeline, NotGiven, None] = NOT_GIVEN,
         # table_args: Union[TableTransformersArgsDict, PyMuPDFArgsDict, NotGiven] = NOT_GIVEN,
         table_args=None,
-        use_markitdown: bool = False,
+        use_markitdown: bool = True,
         llm_client: Optional[object] = None,
-        chunk_size: int = 1000,
-        chunk_overlap: int = 200,
+        chunk_size: int = 256,
+        chunk_overlap: int = 50,
         use_tokens: bool = True,
         verbose: bool = False,
         **kwargs
@@ -103,7 +103,7 @@ class DocumentParser:
         """
         Initialize the document parser.
         
-        Args:
+        Config Args:
             use_markitdown: Whether to use MarkItDown for document parsing
             use_ocr: Whether to use OCR for document parsing
             table_args: Arguments for table extraction
@@ -117,12 +117,14 @@ class DocumentParser:
 
         # Extract config values from kwargs if present
         if 'config' in kwargs and isinstance(kwargs['config'], dict):
+            logger.info(f"Received config: {kwargs['config']}")
+            logger.debug(f"Config chunking settings: {kwargs['config'].get('chunking', {})}")
             config_dict = kwargs['config']
             # Extract chunking parameters
             chunking = config_dict.get('chunking', {})
-            min_tokens = chunking.get('minTokens', config_dict.get('minTokens', 1000))
-            max_tokens = chunking.get('maxTokens', config_dict.get('maxTokens', 1000))
-            chunk_overlap = chunking.get('overlap', config_dict.get('chunkOverlap', 200))
+            min_tokens = chunking.get('minTokens', config_dict.get('minTokens', 125))
+            max_tokens = chunking.get('maxTokens', config_dict.get('maxTokens', 256))
+            chunk_overlap = chunking.get('overlap', config_dict.get('chunkOverlap', 50))
             use_tokens = chunking.get('useTokens', config_dict.get('useTokens', True))
             
             # Override parameters with values from config
